@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FoodFilters</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="container topbar__inner">
+      <nav class="nav" aria-label="Навигация">
+        <a class="nav__link" href="#/home" data-nav="home">Главная</a>
+        <a class="nav__link" href="#/menu" data-nav="menu">Еда</a>
+        <a class="nav__link" href="#/orders" data-nav="orders">Заявки (заказы)</a>
+      </nav>
+
+      <div class="authbar">
+        <div class="authbar__user" id="authUser" aria-live="polite"></div>
+        <button class="btn btn--ghost" id="btnOpenLogin" type="button">Войти</button>
+        <button class="btn btn--ghost hidden" id="btnLogout" type="button">Выйти</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="page" id="pageHome" data-page="home">
+      <div class="hero">
+        <div class="hero__left">
+          <h1 class="h1">Веб‑сервис с фильтрами для поиска и заказа еды</h1>
+          <div class="cta">
+            <a class="btn btn--primary" href="#/menu">Открыть каталог</a>
+            <a class="btn" href="#/orders">Создать заявку</a>
+          </div>
+        </div>
+
+        <div class="hero__right">
+          <div class="panel">
+            <div class="panel__title">Меню</div>
+            <ul class="list">
+              <li class="list__item">Еда: карточки, поиск, фильтры, сортировка.</li>
+              <li class="list__item">Подробности: модальное окно.</li>
+              <li class="list__item">Администрирование: добавить/редактировать/удалить.</li>
+              <li class="list__item">Заявки: форма заказа и фильтр по статусам.</li>
+            </ul>
+            <p class="muted small">
+              Данные пользователей — статичные в JS. Данные еды и заказов — сохраняются в localStorage.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page hidden" id="pageMenu" data-page="menu">
+      <div class="page__head">
+        <div>
+          <h2 class="h2">Еда</h2>
+          <p class="muted">Ищите, фильтруйте, сортируйте. Нажмите на карточку, чтобы открыть детали.</p>
+        </div>
+        <div class="page__actions">
+          <label class="field field--inline">
+            <span class="field__label">Вид</span>
+            <select id="foodView" class="select">
+              <option value="cards">Карточки</option>
+              <option value="table">Таблица</option>
+            </select>
+          </label>
+          <button class="btn btn--primary" id="btnNewFood" type="button">Добавить блюдо</button>
+        </div>
+      </div>
+
+      <div class="filters">
+        <label class="field">
+          <span class="field__label">Поиск</span>
+          <input id="foodSearch" class="input" type="search" placeholder="Название, описание, ингредиенты…" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Категория</span>
+          <select id="foodCategory" class="select">
+            <option value="all">Все</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Вегетарианское</span>
+          <select id="foodVeg" class="select">
+            <option value="all">Не важно</option>
+            <option value="yes">Да</option>
+            <option value="no">Нет</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Сортировка по дате</span>
+          <select id="foodSort" class="select">
+            <option value="date_desc">Сначала новые</option>
+            <option value="date_asc">Сначала старые</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="grid" id="foodGrid" aria-live="polite"></div>
+      <div class="tableWrap hidden" id="foodTableWrap" aria-live="polite"></div>
+      <div class="empty hidden" id="foodEmpty">
+        <div class="empty__title">Ничего не найдено</div>
+        <div class="muted">Попробуйте изменить поисковый запрос или фильтры.</div>
+      </div>
+    </section>
+
+    <section class="page hidden" id="pageOrders" data-page="orders">
+      <div class="page__head">
+        <div>
+          <h2 class="h2">Заявки (заказы)</h2>
+        </div>
+      </div>
+
+      <div class="twoCol">
+        <div class="panel">
+          <div class="panel__title">Создание заявки</div>
+          <form id="orderForm" class="form">
+            <label class="field">
+              <span class="field__label">Блюдо</span>
+              <select id="orderFoodId" class="select" required></select>
+            </label>
+
+            <div class="row2">
+              <label class="field">
+                <span class="field__label">Начало</span>
+                <input id="orderStart" class="input" type="datetime-local" required />
+              </label>
+              <label class="field">
+                <span class="field__label">Конец</span>
+                <input id="orderEnd" class="input" type="datetime-local" required />
+              </label>
+            </div>
+
+            <label class="field">
+              <span class="field__label">Комментарий</span>
+              <textarea id="orderComment" class="textarea" rows="3"
+                placeholder="Например: без лука, доставить к 19:00"></textarea>
+            </label>
+
+            <div class="form__error hidden" id="orderError" role="alert"></div>
+
+            <button class="btn btn--primary" type="submit">Создать</button>
+          </form>
+        </div>
+
+        <div>
+          <div class="panel">
+            <div class="panel__title">Фильтры заявок</div>
+            <div class="filters filters--compact">
+              <label class="field">
+                <span class="field__label">Показать</span>
+                <select id="orderFilter" class="select">
+                  <option value="current">Текущие</option>
+                  <option value="pending">На утверждении</option>
+                  <option value="archive">Архив</option>
+                  <option value="all">Все</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field__label">Сортировка по дате</span>
+                <select id="orderSort" class="select">
+                  <option value="created_desc">По созданию: новые</option>
+                  <option value="created_asc">По созданию: старые</option>
+                  <option value="start_desc">По началу: позже</option>
+                  <option value="start_asc">По началу: раньше</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel__title">Список заявок</div>
+            <div class="listCards" id="ordersList" aria-live="polite"></div>
+            <div class="empty hidden" id="ordersEmpty">
+              <div class="empty__title">Заявок пока нет</div>
+              <div class="muted">Создайте заявку слева — она появится тут.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Login modal -->
+  <div class="modal hidden" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="modal__backdrop" data-close="login"></div>
+    <div class="modal__card">
+      <div class="modal__head">
+        <div class="modal__title" id="loginTitle">Авторизация</div>
+        <button class="iconBtn" type="button" aria-label="Закрыть" data-close="login">✕</button>
+      </div>
+      <form id="loginForm" class="form">
+        <label class="field">
+          <span class="field__label">Логин</span>
+          <input id="loginValue" class="input" autocomplete="username" required />
+        </label>
+        <label class="field">
+          <span class="field__label">Пароль</span>
+          <input id="passwordValue" class="input" type="password" autocomplete="current-password" required />
+        </label>
+        <div class="form__error hidden" id="loginError" role="alert"></div>
+        <button class="btn btn--primary" type="submit">Войти</button>
+        <p class="muted small">
+          Проверка логина/пароля выполняется в JS (статичный массив пользователей).
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Food details modal -->
+  <div class="modal hidden" id="foodModal" role="dialog" aria-modal="true" aria-labelledby="foodTitle">
+    <div class="modal__backdrop" data-close="food"></div>
+    <div class="modal__card">
+      <div class="modal__head">
+        <div class="modal__title" id="foodTitle">Карточка</div>
+        <button class="iconBtn" type="button" aria-label="Закрыть" data-close="food">✕</button>
+      </div>
+      <div class="modal__body" id="foodModalBody"></div>
+      <div class="modal__foot">
+        <button class="btn" id="btnEditFood" type="button">Редактировать</button>
+        <button class="btn btn--danger" id="btnDeleteFood" type="button">Удалить</button>
+        <button class="btn btn--ghost" type="button" data-close="food">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Food editor modal -->
+  <div class="modal hidden" id="foodEditorModal" role="dialog" aria-modal="true" aria-labelledby="foodEditorTitle">
+    <div class="modal__backdrop" data-close="foodEditor"></div>
+    <div class="modal__card">
+      <div class="modal__head">
+        <div class="modal__title" id="foodEditorTitle">Блюдо</div>
+        <button class="iconBtn" type="button" aria-label="Закрыть" data-close="foodEditor">✕</button>
+      </div>
+      <form id="foodForm" class="form">
+        <input type="hidden" id="foodId" />
+        <label class="field">
+          <span class="field__label">Название</span>
+          <input id="foodName" class="input" required />
+        </label>
+        <div class="row2">
+          <label class="field">
+            <span class="field__label">Категория</span>
+            <input id="foodCategoryValue" class="input" placeholder="Например: Пицца" required />
+          </label>
+          <label class="field">
+            <span class="field__label">Цена (₽)</span>
+            <input id="foodPrice" class="input" type="number" min="0" step="1" required />
+          </label>
+        </div>
+        <label class="field">
+          <span class="field__label">Ингредиенты (через запятую)</span>
+          <input id="foodIngredients" class="input" placeholder="сыр, томаты, базилик" />
+        </label>
+        <label class="field">
+          <span class="field__label">Описание</span>
+          <textarea id="foodDesc" class="textarea" rows="3" placeholder="Короткое описание"></textarea>
+        </label>
+        <label class="field inline">
+          <input id="foodVegValue" type="checkbox" />
+          <span>Вегетарианское</span>
+        </label>
+        <div class="form__error hidden" id="foodError" role="alert"></div>
+        <div class="modal__foot">
+          <button class="btn btn--primary" type="submit">Сохранить</button>
+          <button class="btn btn--ghost" type="button" data-close="foodEditor">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+
+</html>
