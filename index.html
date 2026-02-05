@@ -14,7 +14,7 @@
       <nav class="nav" aria-label="Навигация">
         <a class="nav__link" href="#/home" data-nav="home">Главная</a>
         <a class="nav__link" href="#/menu" data-nav="menu">Еда</a>
-        <a class="nav__link" href="#/orders" data-nav="orders">Заявки (заказы)</a>
+        <a class="nav__link" href="#/cart" data-nav="cart">Корзина</a>
       </nav>
 
       <div class="authbar">
@@ -32,7 +32,7 @@
           <h1 class="h1">Веб‑сервис с фильтрами для поиска и заказа еды</h1>
           <div class="cta">
             <a class="btn btn--primary" href="#/menu">Открыть каталог</a>
-            <a class="btn" href="#/orders">Создать заявку</a>
+            <a class="btn" href="#/cart">Открыть корзину</a>
           </div>
         </div>
 
@@ -42,7 +42,7 @@
             <ul class="list">
               <li class="list__item">Еда: карточки, поиск, фильтры, сортировка.</li>
               <li class="list__item">Подробности: модальное окно.</li>
-              <li class="list__item">Заявки: форма заказа и фильтр по статусам.</li>
+              <li class="list__item">Корзина: редактировать количество, удалить, оформить заказ.</li>
             </ul>
           </div>
         </div>
@@ -63,7 +63,7 @@
               <option value="table">Таблица</option>
             </select>
           </label>
-          <button class="btn btn--primary" id="btnNewFood" type="button">Добавить блюдо</button>
+          <button class="btn btn--primary hidden" id="btnNewFood" type="button">Добавить блюдо</button>
         </div>
       </div>
 
@@ -106,78 +106,32 @@
       </div>
     </section>
 
-    <section class="page hidden" id="pageOrders" data-page="orders">
+    <section class="page hidden" id="pageCart" data-page="cart">
       <div class="page__head">
         <div>
-          <h2 class="h2">Заявки (заказы)</h2>
+          <h2 class="h2">Корзина</h2>
+          <p class="muted">Добавляйте блюда из каталога и оформляйте заказ.</p>
+        </div>
+        <div class="page__actions">
+          <a class="btn btn--ghost" href="#/menu">Открыть каталог</a>
         </div>
       </div>
 
       <div class="twoCol">
         <div class="panel">
-          <div class="panel__title">Создание заявки</div>
-          <form id="orderForm" class="form">
-            <label class="field">
-              <span class="field__label">Блюдо</span>
-              <select id="orderFoodId" class="select" required></select>
-            </label>
-
-            <div class="row2">
-              <label class="field">
-                <span class="field__label">Начало</span>
-                <input id="orderStart" class="input" type="datetime-local" required />
-              </label>
-              <label class="field">
-                <span class="field__label">Конец</span>
-                <input id="orderEnd" class="input" type="datetime-local" required />
-              </label>
-            </div>
-
-            <label class="field">
-              <span class="field__label">Комментарий</span>
-              <textarea id="orderComment" class="textarea" rows="3"
-                placeholder="Например: без лука, доставить к 19:00"></textarea>
-            </label>
-
-            <div class="form__error hidden" id="orderError" role="alert"></div>
-
-            <button class="btn btn--primary" type="submit">Создать</button>
-          </form>
+          <div class="panel__title">Содержимое корзины</div>
+          <div class="listCards" id="cartList" aria-live="polite"></div>
+          <div class="empty hidden" id="cartEmpty">
+            <div class="empty__title">Корзина пуста</div>
+            <div class="muted">Откройте каталог и добавьте блюда в корзину.</div>
+          </div>
         </div>
 
-        <div>
-          <div class="panel">
-            <div class="panel__title">Фильтры заявок</div>
-            <div class="filters filters--compact">
-              <label class="field">
-                <span class="field__label">Показать</span>
-                <select id="orderFilter" class="select">
-                  <option value="current">Текущие</option>
-                  <option value="pending">На утверждении</option>
-                  <option value="archive">Архив</option>
-                  <option value="all">Все</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field__label">Сортировка по дате</span>
-                <select id="orderSort" class="select">
-                  <option value="created_desc">По созданию: новые</option>
-                  <option value="created_asc">По созданию: старые</option>
-                  <option value="start_desc">По началу: позже</option>
-                  <option value="start_asc">По началу: раньше</option>
-                </select>
-              </label>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel__title">Список заявок</div>
-            <div class="listCards" id="ordersList" aria-live="polite"></div>
-            <div class="empty hidden" id="ordersEmpty">
-              <div class="empty__title">Заявок пока нет</div>
-              <div class="muted">Создайте заявку слева — она появится тут.</div>
-            </div>
-          </div>
+        <div class="panel">
+          <div class="panel__title">Оформление</div>
+          <div class="muted small" id="cartSummary"></div>
+          <button class="btn btn--primary" id="btnCheckout" type="button">Оформить заказ</button>
+          <div class="panel" style="margin-top:12px" id="checkoutResult" aria-live="polite"></div>
         </div>
       </div>
     </section>
@@ -202,9 +156,6 @@
         </label>
         <div class="form__error hidden" id="loginError" role="alert"></div>
         <button class="btn btn--primary" type="submit">Войти</button>
-        <p class="muted small">
-          Проверка логина/пароля выполняется в JS (статичный массив пользователей).
-        </p>
       </form>
     </div>
   </div>
@@ -219,8 +170,9 @@
       </div>
       <div class="modal__body" id="foodModalBody"></div>
       <div class="modal__foot">
-        <button class="btn" id="btnEditFood" type="button">Редактировать</button>
-        <button class="btn btn--danger" id="btnDeleteFood" type="button">Удалить</button>
+        <button class="btn btn--primary" id="btnAddToCart" type="button">В корзину</button>
+        <button class="btn hidden" id="btnEditFood" type="button">Редактировать</button>
+        <button class="btn btn--danger hidden" id="btnDeleteFood" type="button">Удалить</button>
         <button class="btn btn--ghost" type="button" data-close="food">Закрыть</button>
       </div>
     </div>
@@ -273,6 +225,5 @@
 
   <script src="./app.js"></script>
 </body>
-
 
 </html>
