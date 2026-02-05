@@ -17,6 +17,7 @@
     foods: "ff_foods",
     orders: "ff_orders",
     foodView: "ff_foodView",
+    cartPrefix: "ff_cart_", // per-user cart: ff_cart_<login>
   };
 
   // ---------------------------
@@ -195,6 +196,11 @@
     return false;
   }
 
+  function isAdmin() {
+    const u = getCurrentUser();
+    return u?.role === "admin";
+  }
+
   // ---------------------------
   // Routing (hash)
   // ---------------------------
@@ -211,7 +217,7 @@
 
   function onRoute() {
     const page = getRoute();
-    const allowed = new Set(["home", "menu", "orders"]);
+    const allowed = new Set(["home", "menu", "cart"]);
     const target = allowed.has(page) ? page : "home";
     showPage(target);
   }
@@ -237,14 +243,21 @@
       const closeKey = t?.getAttribute?.("data-close");
       if (!closeKey) return;
 
-      if (closeKey === "login") closeModal("loginModal");
+      if (closeKey === "login") {
+        // If user is not logged in, do not allow closing the auth modal
+        if (!getCurrentUser()) return;
+        closeModal("loginModal");
+      }
       if (closeKey === "food") closeModal("foodModal");
       if (closeKey === "foodEditor") closeModal("foodEditorModal");
     });
 
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
-      ["loginModal", "foodModal", "foodEditorModal"].forEach((id) => closeModal(id));
+      // Keep login modal open until auth
+      if (getCurrentUser()) closeModal("loginModal");
+      closeModal("foodModal");
+      closeModal("foodEditorModal");
     });
   }
 
@@ -275,10 +288,8 @@
       setCurrentUser(null);
       renderAuth();
       renderMenu(); // refresh buttons visibility
-      renderOrders();
-      if (location.hash === "#/orders") {
-        // keep page, just refresh
-      }
+      renderCart();
+      openModal("loginModal");
     });
 
     $("#loginForm")?.addEventListener("submit", (e) => {
@@ -301,8 +312,38 @@
       closeModal("loginModal");
       renderAuth();
       renderMenu();
-      renderOrders();
+      renderCart();
     });
+  }
+
+  // ---------------------------
+  // Cart (per user)
+  // ---------------------------
+  function cartKey() {
+    const u = getCurrentUser();
+    if (!u?.login) return null;
+    return `${LS.cartPrefix}${u.login}`;
+  }
+
+  function getCart() {
+    const key = cartKey();
+    if (!key) return [];
+    const items = readJSON(key, []);
+    return Array.isArray(items) ? items : [];
+  }
+
+  function setCart(items) {
+    const key = cartKey();
+    if (!key) return;
+    writeJSON(key, items);
+  }
+
+  function addToCart(foodId, qty = 1) {
+    const items = getCart();
+    const found = items.find((x) => x.foodId === foodId);
+    if (found) found.qty = Math.min(99, (Number(found.qty) || 0) + qty);
+    else items.push({ foodId, qty: Math.min(99, qty) });
+    setCart(items);
   }
 
   // ---------------------------
@@ -421,8 +462,7 @@
   function renderFoodTable(list) {
     const wrap = $("#foodTableWrap");
     if (!wrap) return;
-    const user = getCurrentUser();
-    const canEdit = !!user;
+    const canEdit = isAdmin();
 
     wrap.innerHTML = `
       <table class="table" aria-label="Таблица блюд">
@@ -448,10 +488,11 @@
                   <td class="mono">${escapeHtml(toDateShort(f.createdAt))}</td>
                   <td class="actions">
                     <button class="btn btn--ghost" type="button" data-action="open" data-id="${escapeHtml(f.id)}">Открыть</button>
-                    <button class="btn btn--ghost" type="button" data-action="edit" data-id="${escapeHtml(f.id)}" ${canEdit ? "" : "disabled"
-            }>Ред.</button>
-                    <button class="btn btn--ghost" type="button" data-action="del" data-id="${escapeHtml(f.id)}" ${canEdit ? "" : "disabled"
-            }>Удал.</button>
+                    ${canEdit
+              ? `<button class="btn btn--ghost" type="button" data-action="edit" data-id="${escapeHtml(f.id)}">Ред.</button>
+                           <button class="btn btn--ghost" type="button" data-action="del" data-id="${escapeHtml(f.id)}">Удал.</button>`
+              : ""
+            }
                   </td>
                 </tr>
               `;
@@ -486,9 +527,8 @@
 
     const btnNew = $("#btnNewFood");
     if (btnNew) {
-      // Add button available only when logged in
-      btnNew.disabled = !getCurrentUser();
-      btnNew.title = btnNew.disabled ? "Войдите, чтобы добавлять блюда" : "";
+      // "Добавить блюдо" видно только админу
+      btnNew.classList.toggle("hidden", !isAdmin());
     }
   }
 
@@ -509,11 +549,11 @@
     if (!id) return;
     if (action === "open") openFoodModal(id);
     if (action === "edit") {
-      if (!requireAuth()) return;
+      if (!isAdmin()) return;
       openFoodEditor(id);
     }
     if (action === "del") {
-      if (!requireAuth()) return;
+      if (!isAdmin()) return;
       deleteFood(id);
     }
   }
@@ -548,12 +588,13 @@
       `;
     }
 
-    // Buttons enable/disable by auth
-    const canEdit = !!getCurrentUser();
-    $("#btnEditFood").disabled = !canEdit;
-    $("#btnDeleteFood").disabled = !canEdit;
-    $("#btnEditFood").title = canEdit ? "" : "Войдите, чтобы редактировать";
-    $("#btnDeleteFood").title = canEdit ? "" : "Войдите, чтобы удалять";
+    // Cart + admin actions
+    const addBtn = $("#btnAddToCart");
+    if (addBtn) addBtn.disabled = !getCurrentUser();
+
+    const canEdit = isAdmin();
+    $("#btnEditFood")?.classList.toggle("hidden", !canEdit);
+    $("#btnDeleteFood")?.classList.toggle("hidden", !canEdit);
 
     openModal("foodModal");
   }
@@ -586,7 +627,7 @@
     setFoods(foods.filter((x) => x.id !== id));
     closeModal("foodModal");
     renderMenu();
-    refreshOrderFoodOptions();
+    renderCart();
   }
 
   function wireFoodUI() {
@@ -600,26 +641,35 @@
     });
 
     $("#btnNewFood")?.addEventListener("click", () => {
-      if (!requireAuth()) return;
+      if (!isAdmin()) return;
       openFoodEditor(null);
     });
 
     $("#btnEditFood")?.addEventListener("click", () => {
-      if (!requireAuth()) return;
+      if (!isAdmin()) return;
       if (!ui.activeFoodId) return;
       closeModal("foodModal");
       openFoodEditor(ui.activeFoodId);
     });
 
     $("#btnDeleteFood")?.addEventListener("click", () => {
-      if (!requireAuth()) return;
+      if (!isAdmin()) return;
       if (!ui.activeFoodId) return;
       deleteFood(ui.activeFoodId);
     });
 
+    $("#btnAddToCart")?.addEventListener("click", () => {
+      if (!requireAuth()) return;
+      if (!ui.activeFoodId) return;
+      addToCart(ui.activeFoodId, 1);
+      closeModal("foodModal");
+      renderCart();
+      location.hash = "#/cart";
+    });
+
     $("#foodForm")?.addEventListener("submit", (e) => {
       e.preventDefault();
-      if (!requireAuth()) return;
+      if (!isAdmin()) return;
 
       const err = $("#foodError");
       const id = $("#foodId").value.trim();
@@ -672,7 +722,7 @@
       setFoods(foods);
       closeModal("foodEditorModal");
       renderMenu();
-      refreshOrderFoodOptions();
+      renderCart();
     });
   }
 
@@ -914,6 +964,149 @@
   }
 
   // ---------------------------
+  // Cart UI (page: #/cart)
+  // ---------------------------
+  function renderCart() {
+    const listEl = $("#cartList");
+    const emptyEl = $("#cartEmpty");
+    const summaryEl = $("#cartSummary");
+    const checkoutBtn = $("#btnCheckout");
+    const resultEl = $("#checkoutResult");
+    if (!listEl || !emptyEl || !summaryEl || !checkoutBtn || !resultEl) return;
+
+    const u = getCurrentUser();
+    const disabled = !u;
+    checkoutBtn.disabled = disabled;
+    checkoutBtn.title = disabled ? "Войдите, чтобы оформить заказ" : "";
+
+    const items = getCart();
+    const foods = getFoods();
+    const byId = new Map(foods.map((f) => [f.id, f]));
+
+    const normalized = items
+      .map((it) => ({ ...it, food: byId.get(it.foodId) }))
+      .filter((x) => x.food);
+
+    const total = normalized.reduce((sum, x) => sum + (Number(x.qty) || 0) * (Number(x.food.price) || 0), 0);
+
+    emptyEl.classList.toggle("hidden", normalized.length !== 0);
+    listEl.innerHTML = normalized
+      .map((x) => {
+        const f = x.food;
+        return `
+          <article class="cartItem" data-food-id="${escapeHtml(f.id)}">
+            <div class="cartItem__top">
+              <div>
+                <h3 class="cartItem__title">${escapeHtml(f.name)}</h3>
+                <div class="cartItem__meta">
+                  <span class="tag">${escapeHtml(f.category || "—")}</span>
+                  <span class="tag">qty: ${escapeHtml(String(x.qty))}</span>
+                  <span class="tag mono">${escapeHtml(String(f.price))} ₽</span>
+                </div>
+              </div>
+              <div class="cartItem__actions">
+                <button class="btn btn--ghost" type="button" data-action="editQty" data-id="${escapeHtml(
+          f.id,
+        )}" ${disabled ? "disabled" : ""}>Редактировать</button>
+                <button class="btn btn--danger" type="button" data-action="remove" data-id="${escapeHtml(
+          f.id,
+        )}" ${disabled ? "disabled" : ""}>Удалить</button>
+              </div>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+
+    summaryEl.innerHTML = `
+      <div class="cartTotal">
+        <span>Итого</span>
+        <span>${escapeHtml(String(total))} ₽</span>
+      </div>
+    `;
+
+    // if no previous checkout result, show placeholder
+    if (!resultEl.dataset.keep) {
+      resultEl.innerHTML = `<div class="muted">Тут появится итог заказа.</div>`;
+    }
+  }
+
+  function wireCart() {
+    $("#cartList")?.addEventListener("click", (e) => {
+      if (!requireAuth()) return;
+      const t = /** @type {HTMLElement} */ (e.target);
+      const btn = t.closest?.("button[data-action]");
+      if (!btn) return;
+      const action = btn.getAttribute("data-action");
+      const id = btn.getAttribute("data-id");
+      if (!action || !id) return;
+
+      const items = getCart();
+      const idx = items.findIndex((x) => x.foodId === id);
+      if (idx < 0) return;
+
+      if (action === "remove") {
+        items.splice(idx, 1);
+        setCart(items);
+        renderCart();
+        return;
+      }
+
+      if (action === "editQty") {
+        const cur = Number(items[idx].qty) || 1;
+        const nextRaw = prompt("Введите количество (1–99):", String(cur));
+        if (nextRaw == null) return;
+        const next = Math.round(Number(nextRaw));
+        if (!Number.isFinite(next) || next < 1 || next > 99) return;
+        items[idx].qty = next;
+        setCart(items);
+        renderCart();
+      }
+    });
+
+    $("#btnCheckout")?.addEventListener("click", () => {
+      if (!requireAuth()) return;
+      const resultEl = $("#checkoutResult");
+      if (!resultEl) return;
+
+      const items = getCart();
+      if (!items.length) return;
+
+      const foods = getFoods();
+      const byId = new Map(foods.map((f) => [f.id, f]));
+      const chosen = items
+        .map((it) => ({ ...it, food: byId.get(it.foodId) }))
+        .filter((x) => x.food);
+
+      const total = chosen.reduce((sum, x) => sum + (Number(x.qty) || 0) * (Number(x.food.price) || 0), 0);
+
+      resultEl.dataset.keep = "1";
+      resultEl.innerHTML = `
+        <div style="font-weight:650;margin-bottom:8px">Пользователь выбрал:</div>
+        <div class="muted" style="display:flex;flex-direction:column;gap:6px">
+          ${chosen
+          .map(
+            (x) =>
+              `<div><span class="tag">${escapeHtml(x.food.name)}</span> × <span class="tag mono">${escapeHtml(
+                String(x.qty),
+              )}</span></div>`,
+          )
+          .join("")}
+        </div>
+        <div class="cartTotal" style="margin-top:12px">
+          <span>Итого</span>
+          <span>${escapeHtml(String(total))} ₽</span>
+        </div>
+        <div style="margin-top:10px;font-weight:650">Спасибо за заказ, будет доставлено за 2 часа.</div>
+      `;
+
+      // clear cart after checkout
+      setCart([]);
+      renderCart();
+    });
+  }
+
+  // ---------------------------
   // Init
   // ---------------------------
   function init() {
@@ -921,14 +1114,14 @@
     wireModalClose();
     wireAuth();
     wireFoodUI();
-    wireOrders();
+    wireCart();
 
     // page routing
     window.addEventListener("hashchange", () => {
       onRoute();
       // render on visible pages (cheap for this demo)
       renderMenu();
-      renderOrders();
+      renderCart();
     });
 
     // initial view mode restore
@@ -936,9 +1129,11 @@
     if ($("#foodView")) $("#foodView").value = view;
 
     renderAuth();
+    // Start with auth window
+    if (!getCurrentUser()) openModal("loginModal");
     onRoute();
     renderMenu();
-    renderOrders();
+    renderCart();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
